@@ -11,15 +11,17 @@ import (
 	"math/big"
 
 	"github.com/mengelbart/qrt"
-	"github.com/mengelbart/qrt/examples/internal/gst"
+	gst "github.com/mengelbart/qrt/examples/internal/gstreamer-sink"
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/pion/interceptor"
+	"github.com/pion/interceptor/pkg/scream"
 	"github.com/pion/mediadevices"
 	"github.com/pion/mediadevices/pkg/codec/x264"
 	_ "github.com/pion/mediadevices/pkg/driver/camera" // This is required to register camera adapter
 	"github.com/pion/mediadevices/pkg/frame"
 	"github.com/pion/mediadevices/pkg/prop"
+	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 )
 
@@ -58,14 +60,13 @@ func qrtServer() error {
 		return err
 	}
 
-	flow, err := qrtSession.AcceptFlow()
+	rtpFlow, err := qrtSession.AcceptFlow()
 	if err != nil {
 		return err
 	}
 
-	// TODO: Replace NoOp by something useful like a Receiver Report generator for congestion control
-	noop := &interceptor.NoOp{}
-	chain := interceptor.NewChain([]interceptor.Interceptor{noop})
+	feedback := scream.NewReceiverInterceptor()
+	chain := interceptor.NewChain([]interceptor.Interceptor{feedback})
 	streamReader := chain.BindRemoteStream(&interceptor.StreamInfo{
 		SSRC: 0,
 	}, interceptor.RTPReaderFunc(func(bytes []byte, _ interceptor.Attributes) (int, interceptor.Attributes, error) {
@@ -75,17 +76,33 @@ func qrtServer() error {
 	pipeline := gst.CreatePipeline()
 	pipeline.Start()
 
-	for buffer := make([]byte, mtu); ; {
-		n, err := flow.Read(buffer)
+	for rtcpBound, buffer := false, make([]byte, mtu); ; {
+		n, err := rtpFlow.Read(buffer)
 		if err != nil {
 			panic(err)
 		}
 
-		log.Println("received rtp")
 		pipeline.Push(buffer[:n])
 
 		if _, _, err := streamReader.Read(buffer[:n], nil); err != nil {
 			panic(err)
+		}
+
+		if !rtcpBound {
+			rtcpFlow, err := qrtSession.OpenWriteFlow()
+			if err != nil {
+				panic(err)
+			}
+
+			chain.BindRTCPWriter(interceptor.RTCPWriterFunc(func(pkts []rtcp.Packet, attributes interceptor.Attributes) (int, error) {
+				buf, err := rtcp.Marshal(pkts)
+				if err != nil {
+					return 0, err
+				}
+				return rtcpFlow.Write(buf)
+			}))
+
+			rtcpBound = true
 		}
 	}
 }
@@ -104,18 +121,20 @@ func qrtClient() error {
 	if err != nil {
 		return err
 	}
-	flow, err := qrtSession.OpenWriteFlow()
+	rtpFlow, err := qrtSession.OpenWriteFlow()
 	if err != nil {
 		return err
 	}
 
-	// TODO: Replace NoOp by something useful like a Congestion Controller
-	noop := &interceptor.NoOp{}
-	chain := interceptor.NewChain([]interceptor.Interceptor{noop})
-	_ = chain.BindLocalStream(&interceptor.StreamInfo{
+	cc := scream.NewSenderInterceptor()
+	chain := interceptor.NewChain([]interceptor.Interceptor{cc})
+	streamWriter := chain.BindLocalStream(&interceptor.StreamInfo{
 		SSRC: 0,
 	}, interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
-		return flow.WriteRTP(header, payload)
+		return rtpFlow.WriteRTP(header, payload)
+	}))
+	rtcpWriter := chain.BindRTCPReader(interceptor.RTCPReaderFunc(func(in []byte, attributes interceptor.Attributes) (int, interceptor.Attributes, error) {
+		return len(in), nil, nil
 	}))
 
 	x264Params, err := x264.NewParams()
@@ -146,6 +165,26 @@ func qrtClient() error {
 		return err
 	}
 
+	tb := cc.GetTargetBitrate(0)
+	log.Printf("init target bitrate: %v\n", tb)
+
+	go func() {
+		rtcpFlow, err := qrtSession.AcceptFlow()
+		if err != nil {
+			panic(err)
+		}
+
+		for buffer := make([]byte, mtu); ; {
+			n, err := rtcpFlow.Read(buffer)
+			if err != nil {
+				panic(err)
+			}
+			if _, _, err := rtcpWriter.Read(buffer[:n], interceptor.Attributes{}); err != nil {
+				panic(err)
+			}
+		}
+	}()
+
 	for {
 		pkts, release, err := rtpReader.Read()
 		if err != nil {
@@ -153,10 +192,15 @@ func qrtClient() error {
 		}
 
 		for _, pkt := range pkts {
-			_, err := flow.WriteRTP(&pkt.Header, pkt.Payload)
+			_, err := streamWriter.Write(&pkt.Header, pkt.Payload, nil)
 			if err != nil {
 				return err
 			}
+		}
+
+		if bitrate := cc.GetTargetBitrate(0); bitrate != tb {
+			tb = bitrate
+			log.Printf("new target bitrate: %v\n", tb)
 		}
 		release()
 	}

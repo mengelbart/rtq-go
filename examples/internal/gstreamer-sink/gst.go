@@ -7,14 +7,27 @@ package gst
 
 */
 import "C"
-import "unsafe"
+import (
+	"log"
+	"unsafe"
+)
+
+// StartMainLoop starts GLib's main loop
+// It needs to be called from the process' main thread
+// Because many gstreamer plugins require access to the main thread
+// See: https://golang.org/pkg/runtime/#LockOSThread
+func StartMainLoop() {
+	C.gstreamer_receive_start_mainloop()
+}
 
 type Pipeline struct {
 	Pipeline *C.GstElement
 }
 
 func CreatePipeline() *Pipeline {
-	pipelineStr := "appsrc name=src ! application/x-rtp ! rtpjitterbuffer ! queue ! rtph264depay ! h264parse ! avdec_h264 ! autovideosink"
+	pipelineStr := "appsrc format=time is-live=true do-timestamp=true name=src ! application/x-rtp"
+	pipelineStr += " ! rtph264depay ! decodebin ! autovideosink"
+	log.Printf("creating pipeline: '%v'\n", pipelineStr)
 	pipelineStrUnsafe := C.CString(pipelineStr)
 	defer C.free(unsafe.Pointer(pipelineStrUnsafe))
 	return &Pipeline{Pipeline: C.gstreamer_receive_create_pipeline(pipelineStrUnsafe)}
@@ -23,11 +36,6 @@ func CreatePipeline() *Pipeline {
 // Start starts the GStreamer Pipeline
 func (p *Pipeline) Start() {
 	C.gstreamer_receive_start_pipeline(p.Pipeline)
-}
-
-// Stop stops the GStreamer Pipeline
-func (p *Pipeline) Stop() {
-	C.gstreamer_receive_stop_pipeline(p.Pipeline)
 }
 
 // Push pushes a buffer on the appsrc of the GStreamer Pipeline

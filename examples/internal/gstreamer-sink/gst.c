@@ -49,8 +49,6 @@ void gstreamer_receive_start_pipeline(GstElement *pipeline) {
   gst_element_set_state(pipeline, GST_STATE_PLAYING);
 }
 
-void gstreamer_receive_stop_pipeline(GstElement *pipeline) { gst_element_set_state(pipeline, GST_STATE_NULL); }
-
 void gstreamer_receive_push_buffer(GstElement *pipeline, void *buffer, int len) {
   GstElement *src = gst_bin_get_by_name(GST_BIN(pipeline), "src");
   if (src != NULL) {

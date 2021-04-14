@@ -8,7 +8,6 @@
 
 GstElement *gstreamer_receive_create_pipeline(char *pipeline);
 void gstreamer_receive_start_pipeline(GstElement *pipeline);
-void gstreamer_receive_stop_pipeline(GstElement *pipeline);
 void gstreamer_receive_push_buffer(GstElement *pipeline, void *buffer, int len);
 void gstreamer_receive_start_mainloop(void);
 
