@@ -65,7 +65,10 @@ func qrtServer() error {
 		return err
 	}
 
-	feedback := scream.NewReceiverInterceptor()
+	feedback, err := scream.NewReceiverInterceptor()
+	if err != nil {
+		return err
+	}
 	chain := interceptor.NewChain([]interceptor.Interceptor{feedback})
 	streamReader := chain.BindRemoteStream(&interceptor.StreamInfo{
 		SSRC: 0,
@@ -126,7 +129,10 @@ func qrtClient() error {
 		return err
 	}
 
-	cc := scream.NewSenderInterceptor()
+	cc, err := scream.NewSenderInterceptor()
+	if err != nil {
+		return err
+	}
 	chain := interceptor.NewChain([]interceptor.Interceptor{cc})
 	streamWriter := chain.BindLocalStream(&interceptor.StreamInfo{
 		SSRC: 0,

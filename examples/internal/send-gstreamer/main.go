@@ -82,10 +82,14 @@ func qrtServer() error {
 		return err
 	}
 
-	feedback := scream.NewReceiverInterceptor()
+	feedback, err := scream.NewReceiverInterceptor()
+	if err != nil {
+		return err
+	}
 	chain := interceptor.NewChain([]interceptor.Interceptor{feedback})
 	streamReader := chain.BindRemoteStream(&interceptor.StreamInfo{
-		SSRC: 0,
+		SSRC:         0,
+		RTCPFeedback: []interceptor.RTCPFeedback{{Type: "ack", Parameter: "ccfb"}},
 	}, interceptor.RTPReaderFunc(func(bytes []byte, _ interceptor.Attributes) (int, interceptor.Attributes, error) {
 		return len(bytes), nil, nil
 	}))
@@ -190,10 +194,14 @@ func qrtClient() error {
 		return err
 	}
 
-	cc := scream.NewSenderInterceptor()
+	cc, err := scream.NewSenderInterceptor()
+	if err != nil {
+		return err
+	}
 	chain := interceptor.NewChain([]interceptor.Interceptor{cc})
 	streamWriter := chain.BindLocalStream(&interceptor.StreamInfo{
-		SSRC: 0,
+		SSRC:         0,
+		RTCPFeedback: []interceptor.RTCPFeedback{{Type: "ack", Parameter: "ccfb"}},
 	}, interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
 		return rtpFlow.WriteRTP(header, payload)
 	}))
