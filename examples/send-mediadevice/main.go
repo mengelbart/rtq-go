@@ -60,7 +60,7 @@ func qrtServer() error {
 		return err
 	}
 
-	rtpFlow, err := qrtSession.AcceptFlow()
+	rtpFlow, err := qrtSession.AcceptFlow(0)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func qrtServer() error {
 		}
 
 		if !rtcpBound {
-			rtcpFlow, err := qrtSession.OpenWriteFlow()
+			rtcpFlow, err := qrtSession.OpenWriteFlow(1)
 			if err != nil {
 				panic(err)
 			}
@@ -124,7 +124,7 @@ func qrtClient() error {
 	if err != nil {
 		return err
 	}
-	rtpFlow, err := qrtSession.OpenWriteFlow()
+	rtpFlow, err := qrtSession.OpenWriteFlow(0)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func qrtClient() error {
 	log.Printf("init target bitrate: %v\n", tb)
 
 	go func() {
-		rtcpFlow, err := qrtSession.AcceptFlow()
+		rtcpFlow, err := qrtSession.AcceptFlow(1)
 		if err != nil {
 			panic(err)
 		}

@@ -77,7 +77,7 @@ func qrtServer() error {
 		return err
 	}
 
-	rtpFlow, err := qrtSession.AcceptFlow()
+	rtpFlow, err := qrtSession.AcceptFlow(0)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func qrtServer() error {
 			}
 
 			if !rtcpBound {
-				rtcpFlow, err := qrtSession.OpenWriteFlow()
+				rtcpFlow, err := qrtSession.OpenWriteFlow(1)
 				if err != nil {
 					panic(err)
 				}
@@ -141,7 +141,7 @@ type gstWriter struct {
 }
 
 func (g *gstWriter) acceptFeedback() {
-	rtcpFlow, err := g.qrtSession.AcceptFlow()
+	rtcpFlow, err := g.qrtSession.AcceptFlow(1)
 	if err != nil {
 		panic(err)
 	}
@@ -189,7 +189,7 @@ func qrtClient() error {
 	if err != nil {
 		return err
 	}
-	rtpFlow, err := qrtSession.OpenWriteFlow()
+	rtpFlow, err := qrtSession.OpenWriteFlow(0)
 	if err != nil {
 		return err
 	}

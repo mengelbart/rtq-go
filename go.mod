@@ -8,4 +8,5 @@ require (
 	github.com/pion/mediadevices v0.2.0
 	github.com/pion/rtcp v1.2.6
 	github.com/pion/rtp v1.6.2
+	github.com/pion/transport v0.12.3
 )
