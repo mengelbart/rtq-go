@@ -9,36 +9,76 @@ package gst
 import "C"
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 	"log"
 	"sync"
 	"unsafe"
 )
 
+var UnknownCodecError = errors.New("unknown codec")
+
 var pipelines = map[int]*Pipeline{}
 var pipelinesLock sync.Mutex
 
 type Pipeline struct {
-	id       int
-	pipeline *C.GstElement
-	writer   io.Writer
+	id          int
+	pipeline    *C.GstElement
+	writer      io.Writer
+	pipelineStr string
 }
 
-func NewPipeline(bitrate int64, w io.Writer) *Pipeline {
+func NewPipeline(codecName, src string, w io.Writer) (*Pipeline, error) {
+	pipelineStr := "appsink name=appsink"
+
+	switch codecName {
+	case "vp8":
+		pipelineStr = src + " ! vp8enc ! rtpvp8pay mtu=1200 ! " + pipelineStr
+
+	case "vp9":
+		pipelineStr = src + " ! vp9enc ! rtpvp9pay ! " + pipelineStr
+
+	case "h264":
+		pipelineStr = src + " ! x264enc speed-preset=utrafast tune=zerolatency ! rtph264pay ! " + pipelineStr
+
+	default:
+		return nil, UnknownCodecError
+	}
+
+	pipelineStrUnsafe := C.CString(pipelineStr)
+	defer C.free(unsafe.Pointer(pipelineStrUnsafe))
+
 	pipelinesLock.Lock()
 	defer pipelinesLock.Unlock()
-	pipelineStr := "appsink name=appsink"
-	pipelineStr = fmt.Sprintf("videotestsrc ! video/x-raw,format=I420 ! x264enc name=x264enc speed-preset=ultrafast tune=zerolatency bitrate=%v ! video/x-h264,stream-format=byte-stream ! rtph264pay name=rtph264pay mtu=1000 ! "+pipelineStr, bitrate)
-	log.Printf("creating pipeline: '%v'\n", pipelineStr)
+
 	sp := &Pipeline{
-		pipeline: C.go_gst_create_src_pipeline(C.CString(pipelineStr)),
-		writer:   w,
-		id:       len(pipelines),
+		id:          len(pipelines),
+		pipeline:    C.go_gst_create_src_pipeline(pipelineStrUnsafe),
+		pipelineStr: pipelineStr,
+		writer:      w,
 	}
 	pipelines[sp.id] = sp
-	return sp
+	return sp, nil
 }
+
+func (p *Pipeline) String() string {
+	return p.pipelineStr
+}
+
+//func NewPipeline(bitrate int64, w io.Writer) *Pipeline {
+//	pipelinesLock.Lock()
+//	defer pipelinesLock.Unlock()
+//	pipelineStr := "appsink name=appsink"
+//	pipelineStr = fmt.Sprintf("videotestsrc ! video/x-raw,format=I420 ! x264enc name=x264enc speed-preset=ultrafast tune=zerolatency bitrate=%v ! video/x-h264,stream-format=byte-stream ! rtph264pay name=rtph264pay mtu=1000 ! "+pipelineStr, bitrate)
+//	log.Printf("creating pipeline: '%v'\n", pipelineStr)
+//	sp := &Pipeline{
+//		pipeline: C.go_gst_create_src_pipeline(C.CString(pipelineStr)),
+//		writer:   w,
+//		id:       len(pipelines),
+//	}
+//	pipelines[sp.id] = sp
+//	return sp
+//}
 
 func (p *Pipeline) Start() {
 	C.go_gst_start_src_pipeline(p.pipeline, C.int(p.id))

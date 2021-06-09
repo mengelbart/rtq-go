@@ -8,9 +8,11 @@ package gst
 */
 import "C"
 import (
-	"log"
+	"errors"
 	"unsafe"
 )
+
+var UnknownCodecError = errors.New("unknown codec")
 
 // StartMainLoop starts GLib's main loop
 // It needs to be called from the process' main thread
@@ -21,16 +23,37 @@ func StartMainLoop() {
 }
 
 type Pipeline struct {
-	Pipeline *C.GstElement
+	Pipeline    *C.GstElement
+	pipelineStr string
 }
 
-func CreatePipeline() *Pipeline {
+func NewPipeline(codecName, dst string) (*Pipeline, error) {
 	pipelineStr := "appsrc format=time is-live=true do-timestamp=true name=src ! application/x-rtp"
-	pipelineStr += " ! rtph264depay ! decodebin ! autovideosink"
-	log.Printf("creating pipeline: '%v'\n", pipelineStr)
+
+	switch codecName {
+	case "vp8":
+		pipelineStr += ", encoding-name=VP8-DRAFT-IETF-01 ! rtpvp8depay ! decodebin ! " + dst
+
+	case "vp9":
+		pipelineStr += " rtpvp9depay ! decodebin ! " + dst
+
+	case "h264":
+		pipelineStr += " rtph264depay ! decodebin ! " + dst
+
+	default:
+		return nil, UnknownCodecError
+	}
+
 	pipelineStrUnsafe := C.CString(pipelineStr)
 	defer C.free(unsafe.Pointer(pipelineStrUnsafe))
-	return &Pipeline{Pipeline: C.gstreamer_receive_create_pipeline(pipelineStrUnsafe)}
+	return &Pipeline{
+		Pipeline:    C.gstreamer_receive_create_pipeline(pipelineStrUnsafe),
+		pipelineStr: pipelineStr,
+	}, nil
+}
+
+func (p *Pipeline) String() string {
+	return p.pipelineStr
 }
 
 // Start starts the GStreamer Pipeline
