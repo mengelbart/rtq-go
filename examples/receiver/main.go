@@ -11,8 +11,8 @@ import (
 	"math/big"
 
 	"github.com/lucas-clemente/quic-go"
-	"github.com/mengelbart/qrt"
-	gstsink "github.com/mengelbart/qrt/examples/internal/gstreamer-sink"
+	"github.com/mengelbart/rtq"
+	gstsink "github.com/mengelbart/rtq/examples/internal/gstreamer-sink"
 )
 
 const mtu = 1400
@@ -34,12 +34,12 @@ func run(addr string, tlsConf *tls.Config) error {
 		return err
 	}
 
-	qrtSession, err := qrt.NewSession(quicSession)
+	rtqSession, err := rtq.NewSession(quicSession)
 	if err != nil {
 		return err
 	}
 
-	rtpFlow, err := qrtSession.AcceptFlow(0)
+	rtpFlow, err := rtqSession.AcceptFlow(0)
 	if err != nil {
 		return err
 	}

@@ -5,8 +5,8 @@ import (
 	"log"
 
 	"github.com/lucas-clemente/quic-go"
-	"github.com/mengelbart/qrt"
-	gstsrc "github.com/mengelbart/qrt/examples/internal/gstreamer-src"
+	"github.com/mengelbart/rtq"
+	gstsrc "github.com/mengelbart/rtq/examples/internal/gstreamer-src"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtp"
 )
@@ -24,7 +24,7 @@ func main() {
 
 type gstWriter struct {
 	targetBitrate int64
-	qrtSession    *qrt.Session
+	rtqSession    *rtq.Session
 	pipeline      *gstsrc.Pipeline
 	rtcpReader    interceptor.RTCPReader
 	rtpWriter     interceptor.RTPWriter
@@ -44,11 +44,11 @@ func run(addr string, tlsConf *tls.Config) error {
 	if err != nil {
 		return err
 	}
-	qrtSession, err := qrt.NewSession(quicSession)
+	rtqSession, err := rtq.NewSession(quicSession)
 	if err != nil {
 		return err
 	}
-	rtpFlow, err := qrtSession.OpenWriteFlow(0)
+	rtpFlow, err := rtqSession.OpenWriteFlow(0)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func run(addr string, tlsConf *tls.Config) error {
 	}))
 
 	writer := &gstWriter{
-		qrtSession: qrtSession,
+		rtqSession: rtqSession,
 		rtpWriter:  streamWriter,
 	}
 

@@ -1,4 +1,4 @@
-package qrt
+package rtq
 
 import (
 	"errors"

@@ -1,6 +1,6 @@
-// Package qrt implements QUIC RTP Tunneling
+// Package rtq implements QUIC RTP Tunneling
 // (https://tools.ietf.org/html/draft-hurst-quic-rtp-tunnelling-01)
-package qrt
+package rtq
 
 import (
 	"bytes"

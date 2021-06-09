@@ -23,7 +23,7 @@ services:
 
   sender:
     build: .
-    image: qrt
+    image: rtq
     container_name: sender
     hostname: sender
     stdin_open: true
@@ -42,7 +42,7 @@ services:
 
   receiver:
     build: .
-    image: qrt
+    image: rtq
     container_name: receiver
     hostname: receiver
     stdin_open: true
