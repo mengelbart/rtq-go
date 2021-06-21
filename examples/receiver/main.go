@@ -7,25 +7,55 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"log"
 	"math/big"
+	"os"
+	"os/signal"
 
 	"github.com/lucas-clemente/quic-go"
+	"github.com/lucas-clemente/quic-go/qlog"
 	"github.com/mengelbart/rtq"
 	gstsink "github.com/mengelbart/rtq/examples/internal/gstreamer-sink"
+	"github.com/mengelbart/rtq/examples/internal/utils"
 )
 
 const mtu = 1400
 
 func main() {
-	err := run(":4242", generateTLSConfig())
+	logFilename := os.Getenv("LOG_FILE")
+	if logFilename == "" {
+		logFilename = "/logs/log.txt"
+	}
+	logfile, err := os.Create(logFilename)
+	if err != nil {
+		fmt.Printf("Could not create log file: %s\n", err.Error())
+		os.Exit(1)
+	}
+	defer logfile.Close()
+	log.SetOutput(logfile)
+
+	qlogWriter, err := utils.GetQLOGWriter()
+	if err != nil {
+		log.Printf("Could not get qlog writer: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	quicConf := &quic.Config{
+		EnableDatagrams: true,
+	}
+	if qlogWriter != nil {
+		quicConf.Tracer = qlog.NewTracer(qlogWriter)
+	}
+
+	err = run(":4242", generateTLSConfig(), quicConf)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(addr string, tlsConf *tls.Config) error {
-	listener, err := quic.ListenAddr(addr, tlsConf, &quic.Config{EnableDatagrams: true})
+func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
+	listener, err := quic.ListenAddr(addr, tlsConf, quicConf)
 	if err != nil {
 		return err
 	}
@@ -49,19 +79,45 @@ func run(addr string, tlsConf *tls.Config) error {
 		return err
 	}
 	log.Printf("created pipeline: '%v'\n", pipeline.String())
+
+	destroyed := make(chan struct{}, 1)
+	gstsink.HandleSinkEOS(func() {
+		pipeline.Destroy()
+		destroyed <- struct{}{}
+	})
 	pipeline.Start()
 
+	done := make(chan struct{}, 1)
+	errChan := make(chan error, 1)
 	go func() {
 		for buffer := make([]byte, mtu); ; {
 			n, err := rtpFlow.Read(buffer)
 			if err != nil {
-				panic(err)
+				if err.Error() == "Application error 0x1: eos" {
+					close(done)
+				}
+				errChan <- err
 			}
 			pipeline.Push(buffer[:n])
 		}
 	}()
-	gstsink.StartMainLoop()
-	return nil
+	go gstsink.StartMainLoop()
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt)
+
+	select {
+	case err1 := <-errChan:
+		err = err1
+	case <-done:
+	case <-signals:
+		log.Printf("got interrupt signal")
+	}
+
+	pipeline.Stop()
+	<-destroyed
+	log.Println("destroyed pipeline, exiting")
+	return err
 }
 
 // Setup a bare-bones TLS config for the server

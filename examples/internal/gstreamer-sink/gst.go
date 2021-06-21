@@ -23,7 +23,7 @@ func StartMainLoop() {
 }
 
 type Pipeline struct {
-	Pipeline    *C.GstElement
+	pipeline    *C.GstElement
 	pipelineStr string
 }
 
@@ -47,7 +47,7 @@ func NewPipeline(codecName, dst string) (*Pipeline, error) {
 	pipelineStrUnsafe := C.CString(pipelineStr)
 	defer C.free(unsafe.Pointer(pipelineStrUnsafe))
 	return &Pipeline{
-		Pipeline:    C.gstreamer_receive_create_pipeline(pipelineStrUnsafe),
+		pipeline:    C.gstreamer_receive_create_pipeline(pipelineStrUnsafe),
 		pipelineStr: pipelineStr,
 	}, nil
 }
@@ -58,12 +58,31 @@ func (p *Pipeline) String() string {
 
 // Start starts the GStreamer Pipeline
 func (p *Pipeline) Start() {
-	C.gstreamer_receive_start_pipeline(p.Pipeline)
+	C.gstreamer_receive_start_pipeline(p.pipeline)
+}
+
+func (p *Pipeline) Stop() {
+	C.gstreamer_receive_stop_pipeline(p.pipeline)
+}
+
+func (p *Pipeline) Destroy() {
+	C.gstreamer_receive_destroy_pipeline(p.pipeline)
+}
+
+var eosHandler func()
+
+func HandleSinkEOS(handler func()) {
+	eosHandler = handler
+}
+
+//export goHandleEOS
+func goHandleEOS() {
+	eosHandler()
 }
 
 // Push pushes a buffer on the appsrc of the GStreamer Pipeline
 func (p *Pipeline) Push(buffer []byte) {
 	b := C.CBytes(buffer)
 	defer C.free(b)
-	C.gstreamer_receive_push_buffer(p.Pipeline, b, C.int(len(buffer)))
+	C.gstreamer_receive_push_buffer(p.pipeline, b, C.int(len(buffer)))
 }

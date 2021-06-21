@@ -1,11 +1,17 @@
 #include "gst.h"
 
+GMainLoop *gstreamer_send_main_loop = NULL;
+void gstreamer_send_start_mainloop(void) {
+  gstreamer_send_main_loop = g_main_loop_new(NULL, FALSE);
+
+  g_main_loop_run(gstreamer_send_main_loop);
+}
+
 static gboolean go_gst_bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
     switch (GST_MESSAGE_TYPE(msg)) {
 
     case GST_MESSAGE_EOS: {
-        g_print("Unexpected end of stream signal\n");
-        exit(1);
+        goHandleEOS();
         break;
     }
 
@@ -49,7 +55,7 @@ GstFlowReturn go_gst_send_new_sample_handler(GstElement *object, gpointer user_d
     return GST_FLOW_OK;
 }
 
-GstElement* go_gst_create_src_pipeline(char *pipelineStr) {
+GstElement* gstreamer_send_create_pipeline(char *pipelineStr) {
     GError *error = NULL;
     GstElement *pipeline;
 
@@ -58,7 +64,7 @@ GstElement* go_gst_create_src_pipeline(char *pipelineStr) {
     return gst_parse_launch(pipelineStr, &error);
 }
 
-void go_gst_start_src_pipeline(GstElement* pipeline, int pipelineId) {
+void gstreamer_send_start_pipeline(GstElement* pipeline, int pipelineId) {
     SampleHandlerUserData* s = malloc(sizeof(SampleHandlerUserData));
     s->pipelineId = pipelineId;
 
@@ -74,19 +80,28 @@ void go_gst_start_src_pipeline(GstElement* pipeline, int pipelineId) {
     gst_element_set_state(pipeline, GST_STATE_PLAYING);
 }
 
-unsigned int go_gst_get_ssrc(GstElement* pipeline) {
-    GstElement* rtph264pay = gst_bin_get_by_name(GST_BIN(pipeline), "rtph264pay");
+void gstreamer_send_stop_pipeline(GstElement* pipeline) {
+    gst_element_send_event(pipeline, gst_event_new_eos());
+}
+
+void gstreamer_send_destroy_pipeline(GstElement* pipeline) {
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
+}
+
+unsigned int gstreamer_send_get_ssrc(GstElement* pipeline, char *payloader) {
+    GstElement* rtph264pay = gst_bin_get_by_name(GST_BIN(pipeline), payloader);
     unsigned int ssrc = 0;
     g_object_get(rtph264pay, "ssrc", &ssrc, NULL);
     return ssrc;
 }
 
-void go_gst_set_ssrc(GstElement* pipeline, unsigned int ssrc) {
-    GstElement* rtph264pay = gst_bin_get_by_name(GST_BIN(pipeline), "rtph264pay");
+void gstreamer_send_set_ssrc(GstElement* pipeline, char *payloader, unsigned int ssrc) {
+    GstElement* rtph264pay = gst_bin_get_by_name(GST_BIN(pipeline), payloader);
     g_object_set(rtph264pay, "ssrc", ssrc, NULL);
 }
 
-void go_gst_set_bitrate(GstElement* pipeline, unsigned int bitrate) {
+void gstreamer_send_set_bitrate(GstElement* pipeline, unsigned int bitrate) {
     GstElement* x264enc = gst_bin_get_by_name(GST_BIN(pipeline), "x264enc");
     g_object_set(x264enc, "bitrate", bitrate, NULL);
 }

@@ -18,6 +18,14 @@ import (
 
 var UnknownCodecError = errors.New("unknown codec")
 
+// StartMainLoop starts GLib's main loop
+// It needs to be called from the process' main thread
+// Because many gstreamer plugins require access to the main thread
+// See: https://golang.org/pkg/runtime/#LockOSThread
+func StartMainLoop() {
+	C.gstreamer_send_start_mainloop()
+}
+
 var pipelines = map[int]*Pipeline{}
 var pipelinesLock sync.Mutex
 
@@ -26,19 +34,24 @@ type Pipeline struct {
 	pipeline    *C.GstElement
 	writer      io.Writer
 	pipelineStr string
+	payloder    string
 }
 
 func NewPipeline(codecName, src string, w io.Writer) (*Pipeline, error) {
 	pipelineStr := "appsink name=appsink"
+	var payloader string
 
 	switch codecName {
 	case "vp8":
+		payloader = "rtpvp8pay"
 		pipelineStr = src + " ! vp8enc ! rtpvp8pay mtu=1200 ! " + pipelineStr
 
 	case "vp9":
+		payloader = "rtpvp9pay"
 		pipelineStr = src + " ! vp9enc ! rtpvp9pay ! " + pipelineStr
 
 	case "h264":
+		payloader = "rtph264pay"
 		pipelineStr = src + " ! x264enc speed-preset=utrafast tune=zerolatency ! rtph264pay ! " + pipelineStr
 
 	default:
@@ -53,8 +66,9 @@ func NewPipeline(codecName, src string, w io.Writer) (*Pipeline, error) {
 
 	sp := &Pipeline{
 		id:          len(pipelines),
-		pipeline:    C.go_gst_create_src_pipeline(pipelineStrUnsafe),
+		pipeline:    C.gstreamer_send_create_pipeline(pipelineStrUnsafe),
 		pipelineStr: pipelineStr,
+		payloder:    payloader,
 		writer:      w,
 	}
 	pipelines[sp.id] = sp
@@ -65,35 +79,43 @@ func (p *Pipeline) String() string {
 	return p.pipelineStr
 }
 
-//func NewPipeline(bitrate int64, w io.Writer) *Pipeline {
-//	pipelinesLock.Lock()
-//	defer pipelinesLock.Unlock()
-//	pipelineStr := "appsink name=appsink"
-//	pipelineStr = fmt.Sprintf("videotestsrc ! video/x-raw,format=I420 ! x264enc name=x264enc speed-preset=ultrafast tune=zerolatency bitrate=%v ! video/x-h264,stream-format=byte-stream ! rtph264pay name=rtph264pay mtu=1000 ! "+pipelineStr, bitrate)
-//	log.Printf("creating pipeline: '%v'\n", pipelineStr)
-//	sp := &Pipeline{
-//		pipeline: C.go_gst_create_src_pipeline(C.CString(pipelineStr)),
-//		writer:   w,
-//		id:       len(pipelines),
-//	}
-//	pipelines[sp.id] = sp
-//	return sp
-//}
-
 func (p *Pipeline) Start() {
-	C.go_gst_start_src_pipeline(p.pipeline, C.int(p.id))
+	C.gstreamer_send_start_pipeline(p.pipeline, C.int(p.id))
+}
+
+func (p *Pipeline) Stop() {
+	C.gstreamer_send_stop_pipeline(p.pipeline)
+}
+
+func (p *Pipeline) Destroy() {
+	C.gstreamer_send_destroy_pipeline(p.pipeline)
+}
+
+var eosHandler func()
+
+func HandleSinkEOS(handler func()) {
+	eosHandler = handler
+}
+
+//export goHandleEOS
+func goHandleEOS() {
+	eosHandler()
 }
 
 func (p *Pipeline) SSRC() uint {
-	return uint(C.go_gst_get_ssrc(p.pipeline))
+	payloderStrUnsafe := C.CString(p.payloder)
+	defer C.free(unsafe.Pointer(payloderStrUnsafe))
+	return uint(C.gstreamer_send_get_ssrc(p.pipeline, payloderStrUnsafe))
 }
 
 func (p *Pipeline) SetSSRC(ssrc uint) {
-	C.go_gst_set_ssrc(p.pipeline, C.uint(ssrc))
+	payloaderStrUnsafe := C.CString(p.payloder)
+	defer C.free(unsafe.Pointer(payloaderStrUnsafe))
+	C.gstreamer_send_set_ssrc(p.pipeline, payloaderStrUnsafe, C.uint(ssrc))
 }
 
 func (p *Pipeline) SetBitRate(bitrate uint) {
-	C.go_gst_set_bitrate(p.pipeline, C.uint(bitrate))
+	C.gstreamer_send_set_bitrate(p.pipeline, C.uint(bitrate))
 }
 
 //export goHandlePipelineBuffer

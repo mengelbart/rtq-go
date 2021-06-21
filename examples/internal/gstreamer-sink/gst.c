@@ -10,27 +10,27 @@ void gstreamer_receive_start_mainloop(void) {
 }
 
 static gboolean gstreamer_receive_bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
-  switch (GST_MESSAGE_TYPE(msg)) {
+    switch (GST_MESSAGE_TYPE(msg)) {
+    case GST_MESSAGE_EOS: {
+        goHandleEOS();
+        break;
+    }
 
-  case GST_MESSAGE_EOS:
-    g_print("End of stream\n");
-    exit(1);
-    break;
+    case GST_MESSAGE_ERROR: {
+        gchar *debug;
+        GError *error;
 
-  case GST_MESSAGE_ERROR: {
-    gchar *debug;
-    GError *error;
+        gst_message_parse_error(msg, &error, &debug);
+        g_free(debug);
 
-    gst_message_parse_error(msg, &error, &debug);
-    g_free(debug);
+        g_printerr("Error: %s\n", error->message);
+        g_error_free(error);
+        exit(1);
+    }
 
-    g_printerr("Error: %s\n", error->message);
-    g_error_free(error);
-    exit(1);
-  }
-  default:
-    break;
-  }
+    default:
+        break;
+    }
 
   return TRUE;
 }
@@ -47,6 +47,15 @@ void gstreamer_receive_start_pipeline(GstElement *pipeline) {
   gst_object_unref(bus);
 
   gst_element_set_state(pipeline, GST_STATE_PLAYING);
+}
+
+void gstreamer_receive_stop_pipeline(GstElement* pipeline) {
+    gst_element_send_event(pipeline, gst_event_new_eos());
+}
+
+void gstreamer_receive_destroy_pipeline(GstElement* pipeline) {
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
 }
 
 void gstreamer_receive_push_buffer(GstElement *pipeline, void *buffer, int len) {
