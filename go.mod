@@ -1,4 +1,4 @@
-module github.com/mengelbart/rtq
+module github.com/mengelbart/rtq-go
 
 go 1.16
 
