@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -46,7 +47,15 @@ func main() {
 		quicConf.Tracer = qlog.NewTracer(qlogWriter)
 	}
 
-	err = run(":4242", tlsConf, quicConf)
+	flag.Parse()
+	files := flag.Args()
+	log.Printf("args: %v\n", files)
+	src := "videotestsrc"
+	if len(files) > 0 {
+		src = files[0]
+	}
+
+	err = run(":4242", tlsConf, quicConf, src)
 	if err != nil {
 		log.Printf("Could not run sender: %v\n", err.Error())
 		os.Exit(1)
@@ -79,7 +88,7 @@ func (g *gstWriter) Close() error {
 	return g.rtqSession.Close()
 }
 
-func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
+func run(addr string, tlsConf *tls.Config, quicConf *quic.Config, src string) error {
 	quicSession, err := quic.DialAddr(addr, tlsConf, quicConf)
 	if err != nil {
 		return err
@@ -88,6 +97,7 @@ func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
 	if err != nil {
 		return err
 	}
+
 	rtpFlow, err := rtqSession.OpenWriteFlow(0)
 	if err != nil {
 		return err
@@ -103,7 +113,11 @@ func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
 		rtpWriter:  streamWriter,
 	}
 
-	pipeline, err := gstsrc.NewPipeline("vp8", "videotestsrc", writer)
+	srcStr := src
+	if srcStr != "videotestsrc" {
+		srcStr = fmt.Sprintf("filesrc location=%v ! decodebin ! videoconvert ", src)
+	}
+	pipeline, err := gstsrc.NewPipeline("vp8", srcStr, writer)
 	if err != nil {
 		return err
 	}
@@ -143,6 +157,6 @@ func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
 
 	<-destroyed
 	log.Println("destroyed pipeline, exiting")
-	return err
 
+	return err
 }

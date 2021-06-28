@@ -25,16 +25,15 @@ const mtu = 1400
 
 func main() {
 	logFilename := os.Getenv("LOG_FILE")
-	if logFilename == "" {
-		logFilename = "/logs/log.txt"
+	if logFilename != "" {
+		logfile, err := os.Create(logFilename)
+		if err != nil {
+			fmt.Printf("Could not create log file: %s\n", err.Error())
+			os.Exit(1)
+		}
+		defer logfile.Close()
+		log.SetOutput(logfile)
 	}
-	logfile, err := os.Create(logFilename)
-	if err != nil {
-		fmt.Printf("Could not create log file: %s\n", err.Error())
-		os.Exit(1)
-	}
-	defer logfile.Close()
-	log.SetOutput(logfile)
 
 	qlogWriter, err := utils.GetQLOGWriter()
 	if err != nil {
@@ -49,13 +48,19 @@ func main() {
 		quicConf.Tracer = qlog.NewTracer(qlogWriter)
 	}
 
-	err = run(":4242", generateTLSConfig(), quicConf)
+	dstStr := "autovideosink"
+	dst := os.Getenv("DESTINATION")
+	if len(dst) > 0 {
+		dstStr = fmt.Sprintf("matroskamux ! filesink location=%v", dst)
+	}
+
+	err = run(":4242", generateTLSConfig(), quicConf, dstStr)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
+func run(addr string, tlsConf *tls.Config, quicConf *quic.Config, dst string) error {
 	listener, err := quic.ListenAddr(addr, tlsConf, quicConf)
 	if err != nil {
 		return err
@@ -75,7 +80,7 @@ func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
 		return err
 	}
 
-	pipeline, err := gstsink.NewPipeline("vp8", "autovideosink")
+	pipeline, err := gstsink.NewPipeline("vp8", dst)
 	if err != nil {
 		return err
 	}
