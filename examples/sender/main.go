@@ -29,6 +29,11 @@ func main() {
 		log.SetOutput(logfile)
 	}
 
+	remoteHost := os.Getenv("RECEIVER")
+	if remoteHost == "" {
+		remoteHost = ":4242"
+	}
+
 	qlogWriter, err := utils.GetQLOGWriter()
 	if err != nil {
 		log.Printf("Could not get qlog writer: %s\n", err.Error())
@@ -49,13 +54,14 @@ func main() {
 
 	flag.Parse()
 	files := flag.Args()
+
 	log.Printf("args: %v\n", files)
 	src := "videotestsrc"
-	if len(files) > 0 {
+	if len(files) > 1 {
 		src = files[0]
 	}
 
-	err = run(":4242", tlsConf, quicConf, src)
+	err = run(remoteHost, tlsConf, quicConf, src)
 	if err != nil {
 		log.Printf("Could not run sender: %v\n", err.Error())
 		os.Exit(1)
