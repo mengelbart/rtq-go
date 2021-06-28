@@ -57,7 +57,7 @@ func main() {
 
 	log.Printf("args: %v\n", files)
 	src := "videotestsrc"
-	if len(files) > 1 {
+	if len(files) > 0 {
 		src = files[0]
 	}
 
