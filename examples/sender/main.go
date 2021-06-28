@@ -18,16 +18,15 @@ import (
 
 func main() {
 	logFilename := os.Getenv("LOG_FILE")
-	if logFilename == "" {
-		logFilename = "/logs/log.txt"
+	if logFilename != "" {
+		logfile, err := os.Create(logFilename)
+		if err != nil {
+			fmt.Printf("Could not create log file: %s\n", err.Error())
+			os.Exit(1)
+		}
+		defer logfile.Close()
+		log.SetOutput(logfile)
 	}
-	logfile, err := os.Create(logFilename)
-	if err != nil {
-		fmt.Printf("Could not create log file: %s\n", err.Error())
-		os.Exit(1)
-	}
-	defer logfile.Close()
-	log.SetOutput(logfile)
 
 	qlogWriter, err := utils.GetQLOGWriter()
 	if err != nil {
@@ -68,7 +67,16 @@ func (g *gstWriter) Write(p []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	return g.rtpWriter.Write(&pkt.Header, p[pkt.Header.MarshalSize():], nil)
+	n, err = g.rtpWriter.Write(&pkt.Header, p[pkt.Header.MarshalSize():], nil)
+	if err != nil {
+		log.Printf("failed to write paket: %v, stopping pipeline\n", err.Error())
+		g.pipeline.Stop()
+	}
+	return
+}
+
+func (g *gstWriter) Close() error {
+	return g.rtqSession.Close()
 }
 
 func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
@@ -109,19 +117,29 @@ func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
 
+	done := make(chan struct{}, 1)
 	destroyed := make(chan struct{}, 1)
 	gstsrc.HandleSinkEOS(func() {
-		log.Println("destroy pipeline")
+		log.Println("got EOS, stopping pipeline")
+		err := writer.Close()
+		if err != nil {
+			log.Printf("failed to close rtq session: %s\n", err.Error())
+		}
+		err = chain.Close()
+		if err != nil {
+			log.Printf("failed to close interceptor chain: %s\n", err.Error())
+		}
+		close(done)
 		pipeline.Destroy()
 		destroyed <- struct{}{}
 	})
 
 	select {
 	case <-signals:
-		log.Printf("got interrupt signal")
+		log.Printf("got interrupt signal, stopping pipeline")
+		pipeline.Stop()
+	case <-done:
 	}
-
-	pipeline.Stop()
 
 	<-destroyed
 	log.Println("destroyed pipeline, exiting")

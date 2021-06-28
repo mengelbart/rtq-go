@@ -4,9 +4,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/pion/transport/packetio"
-
 	"github.com/pion/rtp"
+	"github.com/pion/transport/packetio"
 )
 
 type WriteFlow struct {
@@ -61,4 +60,8 @@ func (r *ReadFlow) ReadRTP(buf []byte) (int, *rtp.Header, error) {
 	}
 
 	return n, header, nil
+}
+
+func (r *ReadFlow) close() error {
+	return r.buffer.Close()
 }

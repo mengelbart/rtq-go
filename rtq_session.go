@@ -4,6 +4,7 @@ package rtq
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 
 	"github.com/lucas-clemente/quic-go"
@@ -59,7 +60,7 @@ func (s *Session) AcceptFlow(flowID uint64) (*ReadFlow, error) {
 }
 
 func (s *Session) Close() error {
-	panic("implement me")
+	return s.sess.CloseWithError(0, "eos")
 }
 
 func (s *Session) sendDatagram(d *datagram) error {
@@ -74,22 +75,35 @@ func (s *Session) start() error {
 		for {
 			message, err := s.sess.ReceiveMessage()
 			if err != nil {
-				// TODO: Log error? Check for io.EOF?
-				return
+				if err.Error() == "Application error 0x0: eos" {
+					fmt.Printf("receiveMessage error: %s\n", err.Error())
+					s.readFlowsLock.Lock()
+					for _, flow := range s.readFlows {
+						err = flow.close()
+						if err != nil {
+							fmt.Printf("failed to close flow: %s\n", err)
+						}
+					}
+					s.readFlowsLock.Unlock()
+					return
+				}
 			}
 			reader := bytes.NewReader(message)
 			flowID, err := quicvarint.Read(reader)
 			if err != nil {
 				// TODO: Handle invalid datagram
+				fmt.Println("// TODO: Handle invalid datagram")
 				return
 			}
 			flow := s.getFlow(flowID)
 			if flow == nil {
 				// TODO: Create flow?
+				fmt.Println("// TODO: Create flow?")
 			}
 			_, err = flow.write(message[quicvarint.Len(flowID):])
 			if err != nil {
 				// TODO: Handle error?
+				fmt.Println("// TODO: Handle error?")
 				return
 			}
 		}

@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"os"
@@ -69,7 +70,7 @@ func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
 		return err
 	}
 
-	rtpFlow, err := rtqSession.AcceptFlow(0)
+	rtqFlow, err := rtqSession.AcceptFlow(0)
 	if err != nil {
 		return err
 	}
@@ -91,10 +92,11 @@ func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
 	errChan := make(chan error, 1)
 	go func() {
 		for buffer := make([]byte, mtu); ; {
-			n, err := rtpFlow.Read(buffer)
+			n, err := rtqFlow.Read(buffer)
 			if err != nil {
-				if err.Error() == "Application error 0x1: eos" {
+				if err == io.EOF {
 					close(done)
+					break
 				}
 				errChan <- err
 			}
@@ -112,8 +114,13 @@ func run(addr string, tlsConf *tls.Config, quicConf *quic.Config) error {
 	case <-done:
 	case <-signals:
 		log.Printf("got interrupt signal")
+		err := rtqSession.Close()
+		if err != nil {
+			log.Printf("failed to close rtq session: %v\n", err.Error())
+		}
 	}
 
+	log.Println("stopping pipeline")
 	pipeline.Stop()
 	<-destroyed
 	log.Println("destroyed pipeline, exiting")
