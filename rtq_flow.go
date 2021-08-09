@@ -28,6 +28,18 @@ func (w *WriteFlow) WriteRTP(header *rtp.Header, payload []byte) (int, error) {
 	return w.Write(append(headerBuf, payload...))
 }
 
+func (w *WriteFlow) WriteRTPNotify(header *rtp.Header, payload []byte, notify func(bool)) (int, error) {
+	headerBuf, err := header.Marshal()
+	if err != nil {
+		return 0, err
+	}
+	b := append(headerBuf, payload...)
+	return len(b), w.session.sendDatagramNotify(&datagram{
+		flowID: w.flowID,
+		data:   b,
+	}, notify)
+}
+
 type ReadFlow struct {
 	session *Session
 	buffer  io.ReadWriteCloser

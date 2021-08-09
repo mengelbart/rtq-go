@@ -70,6 +70,13 @@ func (s *Session) sendDatagram(d *datagram) error {
 	return s.sess.SendMessage(buf.Bytes())
 }
 
+func (s *Session) sendDatagramNotify(d *datagram, cb func(bool)) error {
+	buf := bytes.Buffer{}
+	quicvarint.Write(&buf, d.flowID)
+	buf.Write(d.data)
+	return s.sess.SendMessageNotify(buf.Bytes(), cb)
+}
+
 func (s *Session) start() error {
 	go func() {
 		for {
