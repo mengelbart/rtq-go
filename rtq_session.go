@@ -76,7 +76,6 @@ func (s *Session) start() error {
 			message, err := s.sess.ReceiveMessage()
 			if err != nil {
 				if err.Error() == "Application error 0x0: eos" {
-					fmt.Printf("receiveMessage error: %s\n", err.Error())
 					s.readFlowsLock.Lock()
 					for _, flow := range s.readFlows {
 						err = flow.close()
@@ -91,19 +90,19 @@ func (s *Session) start() error {
 			reader := bytes.NewReader(message)
 			flowID, err := quicvarint.Read(reader)
 			if err != nil {
-				// TODO: Handle invalid datagram
-				fmt.Println("// TODO: Handle invalid datagram")
-				return
+				fmt.Printf("failed to parse flow identifier: %s\n", err)
+				continue
 			}
 			flow := s.getFlow(flowID)
 			if flow == nil {
 				// TODO: Create flow?
 				fmt.Println("// TODO: Create flow?")
+				continue
 			}
 			_, err = flow.write(message[quicvarint.Len(flowID):])
 			if err != nil {
 				// TODO: Handle error?
-				fmt.Println("// TODO: Handle error?")
+				fmt.Printf("// TODO: handler flow.write error: %s\n", err)
 				return
 			}
 		}
