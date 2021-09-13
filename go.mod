@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/lucas-clemente/quic-go v0.20.1
-	github.com/pion/rtp v1.6.2
+	github.com/pion/rtp v1.7.2
 	github.com/pion/transport v0.12.3
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect
 )
