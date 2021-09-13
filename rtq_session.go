@@ -86,17 +86,19 @@ func (s *Session) start() error {
 					s.readFlowsLock.Unlock()
 					return
 				}
+				fmt.Printf("failed to receive message: %v\n", err)
+				return
 			}
 			reader := bytes.NewReader(message)
 			flowID, err := quicvarint.Read(reader)
 			if err != nil {
-				fmt.Printf("failed to parse flow identifier: %s\n", err)
-				continue
+				fmt.Printf("failed to parse flow identifier from message of length: %v: %s\n", len(message), err)
+				return
 			}
 			flow := s.getFlow(flowID)
 			if flow == nil {
 				// TODO: Create flow?
-				fmt.Println("// TODO: Create flow?")
+				fmt.Printf("dropping message for unknown flow, forgot to create flow with ID %v?", flowID)
 				continue
 			}
 			_, err = flow.write(message[quicvarint.Len(flowID):])
