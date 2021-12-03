@@ -63,18 +63,13 @@ func (s *Session) Close() error {
 	return s.sess.CloseWithError(0, "eos")
 }
 
-func (s *Session) sendDatagram(d *datagram) error {
+func (s *Session) asyncSendDatagramNotify(d *datagram, sent func(), cb func(bool)) error {
 	buf := bytes.Buffer{}
 	quicvarint.Write(&buf, d.flowID)
 	buf.Write(d.data)
-	return s.sess.SendMessage(buf.Bytes())
-}
 
-func (s *Session) sendDatagramNotify(d *datagram, cb func(bool)) error {
-	buf := bytes.Buffer{}
-	quicvarint.Write(&buf, d.flowID)
-	buf.Write(d.data)
-	return s.sess.SendMessageNotify(buf.Bytes(), cb)
+	s.sess.AsyncSendMessageNotify(buf.Bytes(), sent, cb)
+	return nil
 }
 
 func (s *Session) start() error {

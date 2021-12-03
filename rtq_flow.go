@@ -14,10 +14,10 @@ type WriteFlow struct {
 }
 
 func (w *WriteFlow) Write(b []byte) (n int, err error) {
-	return len(b), w.session.sendDatagram(&datagram{
+	return len(b), w.session.asyncSendDatagramNotify(&datagram{
 		flowID: w.flowID,
 		data:   b,
-	})
+	}, nil, nil)
 }
 
 func (w *WriteFlow) WriteRTP(header *rtp.Header, payload []byte) (int, error) {
@@ -28,16 +28,16 @@ func (w *WriteFlow) WriteRTP(header *rtp.Header, payload []byte) (int, error) {
 	return w.Write(append(headerBuf, payload...))
 }
 
-func (w *WriteFlow) WriteRTPNotify(header *rtp.Header, payload []byte, notify func(bool)) (int, error) {
+func (w *WriteFlow) WriteRTPNotify(header *rtp.Header, payload []byte, sentCB func(), ackCB func(bool)) (int, error) {
 	headerBuf, err := header.Marshal()
 	if err != nil {
 		return 0, err
 	}
 	b := append(headerBuf, payload...)
-	return len(b), w.session.sendDatagramNotify(&datagram{
+	return len(b), w.session.asyncSendDatagramNotify(&datagram{
 		flowID: w.flowID,
 		data:   b,
-	}, notify)
+	}, sentCB, ackCB)
 }
 
 type ReadFlow struct {

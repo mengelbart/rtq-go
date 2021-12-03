@@ -9,4 +9,4 @@ require (
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect
 )
 
-replace github.com/lucas-clemente/quic-go v0.20.1 => github.com/mengelbart/quic-go v0.7.1-0.20210809134509-defbb651803a
+replace github.com/lucas-clemente/quic-go v0.20.1 => github.com/mengelbart/quic-go v0.7.1-0.20211215120218-ca20b5dae716
